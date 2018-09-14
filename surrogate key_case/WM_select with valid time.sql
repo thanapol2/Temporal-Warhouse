@@ -1,8 +1,9 @@
 ---- select with valid time
+EXECUTE DBMS_WM.SetValidTime(TO_DATE('01/01/2018', 'DD/MM/YYYY'),TO_DATE('31/12/2018', 'DD/MM/YYYY'));
 SELECT s.sales_id,
   department ,
-  to_char(sd.wm_valid.validFrom,'dd-mon-yyyy') start_date,
-  to_char(sd.wm_valid.validTill,'dd-mon-yyyy') end_date,
+  TO_CHAR(sd.wm_valid.validFrom,'dd-mon-yyyy') start_date,
+  TO_CHAR(sd.wm_valid.validTill,'dd-mon-yyyy') end_date,
   d.full_date,
   i.*,
   s.amount
@@ -12,17 +13,14 @@ ON s.date_key = d.date_key
 INNER JOIN ITEM_DIMENSION i
 ON i.item_cd = s.item_cd
 INNER JOIN sales_dimension sd
-ON s.SALES_ID = sd.sales_id
-AND  WM_CONTAINS  (sd.wm_valid,wm_period(d.full_date,d.full_date+1)) = 1
-order by full_date;
-
-
-
+ON s.SALES_ID                                                      = sd.sales_id
+AND WM_CONTAINS (sd.wm_valid,wm_period(d.full_date,d.full_date+1)) = 1
+ORDER BY full_date;
 -- with surrgate key
 SELECT s.sales_id,
   department ,
-  sd.start_date,
-  sd.end_date,
+  sd.*,
+  d.date_key,
   d.full_date,
   i.*,
   s.amount
@@ -31,21 +29,118 @@ INNER JOIN TIME_DIMENSION d
 ON s.date_key = d.date_key
 INNER JOIN ITEM_DIMENSION i
 ON i.item_cd = s.item_cd
-INNER JOIN (select ss.*, st.FULL_DATE as start_date ,ed.FULL_DATE as end_date
-from SALES_DIMENSION_SUR ss
-inner join TIME_DIMENSION st
-on ss.START_KEY = st.DATE_KEY
-inner join  TIME_DIMENSION ed
-on ss.end_KEY = ed.DATE_KEY) sd
-ON s.SALES_ID = sd.sales_id
-AND  d.full_date >= sd.start_date
-and d.full_date < sd.end_date
-order by full_date;
-
+INNER JOIN
+  (SELECT ss.*,
+    st.FULL_DATE   AS start_date ,
+    st.month_short AS st_mon_short,
+    st.year        AS st_year,
+    ed.FULL_DATE   AS end_date,
+    ed.month_short AS ed_mon_short,
+    ed.year        AS ed_year
+  FROM SALES_DIMENSION_SUR ss
+  INNER JOIN TIME_DIMENSION st
+  ON ss.START_KEY = st.DATE_KEY
+  INNER JOIN TIME_DIMENSION ed
+  ON ss.end_KEY      = ed.DATE_KEY
+  ) sd ON s.SALES_ID = sd.sales_id
+AND d.full_date     >= sd.start_date
+AND d.full_date      < sd.end_date
+ORDER BY full_date;
 --- sales dimension join time dimension
-select ss.*, st.FULL_DATE as start_date ,ed.FULL_DATE as end_date
-from SALES_DIMENSION_SUR ss
-inner join TIME_DIMENSION st
-on ss.START_KEY = st.DATE_KEY
-inner join  TIME_DIMENSION ed
-on ss.end_KEY = ed.DATE_KEY;
+SELECT ss.*,
+  st.FULL_DATE AS start_date ,
+  ed.FULL_DATE AS end_date
+FROM SALES_DIMENSION_SUR ss
+INNER JOIN TIME_DIMENSION st
+ON ss.START_KEY = st.DATE_KEY
+INNER JOIN TIME_DIMENSION ed
+ON ss.end_KEY = ed.DATE_KEY;
+--- Query Type 1 Find out all the products sold on 01/05/2018
+SELECT s.sales_id,
+  department ,
+  sd.start_date,
+  sd.end_date,
+  s.date_key,
+  d.full_date as sales_date,
+  i.*,
+  s.amount
+FROM sum_sales s
+INNER JOIN TIME_DIMENSION d
+ON s.date_key = d.date_key
+INNER JOIN ITEM_DIMENSION i
+ON i.item_cd = s.item_cd
+INNER JOIN
+  (SELECT ss.*,
+    st.FULL_DATE   AS start_date ,
+    st.FISCAL_QUARTER as start_q,
+    st.month_short AS st_mon_short,
+    st.year        AS st_year,
+    ed.FULL_DATE   AS end_date,
+    ed.FISCAL_QUARTER as end_q,
+    ed.month_short AS ed_mon_short,
+    ed.year        AS ed_year
+  FROM SALES_DIMENSION_SUR ss
+  INNER JOIN TIME_DIMENSION st
+  ON ss.START_KEY = st.DATE_KEY
+  INNER JOIN TIME_DIMENSION ed
+  ON ss.end_KEY      = ed.DATE_KEY
+  ) sd ON s.SALES_ID = sd.sales_id
+AND d.full_date     >= sd.start_date
+AND d.full_date      < sd.end_date
+where full_date = to_date('01/05/2018','dd/mm/yyyy')
+ORDER BY full_date;
+--- Query Type 2 What was the average sales during Q2 in 2018 per department per items
+SELECT i.ITEM_NAME,department,avg(amount)
+FROM sum_sales s
+INNER JOIN TIME_DIMENSION d
+ON s.date_key = d.date_key
+INNER JOIN ITEM_DIMENSION i
+ON i.item_cd = s.item_cd
+INNER JOIN
+  (SELECT ss.*,
+    st.FULL_DATE   AS start_date ,
+    st.FISCAL_QUARTER as start_q,
+    st.month_short AS st_mon_short,
+    st.year        AS st_year,
+    ed.FULL_DATE   AS end_date,
+    ed.FISCAL_QUARTER as end_q,
+    ed.month_short AS ed_mon_short,
+    ed.year        AS ed_year
+  FROM SALES_DIMENSION_SUR ss
+  INNER JOIN TIME_DIMENSION st
+  ON ss.START_KEY = st.DATE_KEY
+  INNER JOIN TIME_DIMENSION ed
+  ON ss.end_KEY      = ed.DATE_KEY
+  ) sd ON s.SALES_ID = sd.sales_id
+AND d.full_date     >= sd.start_date
+AND d.full_date      < sd.end_date
+where d.fiscal_quarter = '2018/2'
+group by department,i.ITEM_name;
+--- Query Type 3 What was the summary of sales when department of sales does not change for at most 4 month
+SELECT s.sales_id,department,sum(amount)
+FROM sum_sales s
+INNER JOIN TIME_DIMENSION d
+ON s.date_key = d.date_key
+INNER JOIN ITEM_DIMENSION i
+ON i.item_cd = s.item_cd
+INNER JOIN
+  (SELECT ss.*,
+    st.FULL_DATE   AS start_date ,
+    st.FISCAL_QUARTER as start_q,
+    st.month_short AS st_mon_short,
+    st.year        AS st_year,
+    ed.FULL_DATE   AS end_date,
+    ed.FISCAL_QUARTER as end_q,
+    ed.month_short AS ed_mon_short,
+    ed.year        AS ed_year
+  FROM SALES_DIMENSION_SUR ss
+  INNER JOIN TIME_DIMENSION st
+  ON ss.START_KEY = st.DATE_KEY
+  INNER JOIN TIME_DIMENSION ed
+  ON ss.end_KEY      = ed.DATE_KEY
+  ) sd ON s.SALES_ID = sd.sales_id
+AND d.full_date     >= sd.start_date
+AND d.full_date      < sd.end_date
+where MONTHS_BETWEEN(end_date,start_date) <= 4
+group by s.sales_id,department;
+--- Query Type 4 When were the number of product sold for the product at a maximum

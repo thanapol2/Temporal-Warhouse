@@ -2,9 +2,12 @@
 EXECUTE DBMS_WM.SetValidTime(TO_DATE('01/01/2018', 'DD/MM/YYYY'),TO_DATE('31/12/2018', 'DD/MM/YYYY'));
 SELECT s.sales_id,
   department ,
-  TO_CHAR(sd.wm_valid.validFrom,'dd-mon-yyyy') start_date,
-  TO_CHAR(sd.wm_valid.validTill,'dd-mon-yyyy') end_date,
-  d.full_date,
+  TO_CHAR(sd.wm_valid.validFrom,'dd-MON-yyyy') start_date,
+  TO_CHAR(sd.wm_valid.validTill,'dd-MON-yyyy') end_date,
+  d.full_date sales_date,
+  d.days_name,
+  d.FISCAL_QUARTER,
+  d.MONTH_SHORT,
   i.*,
   s.amount
 FROM sum_sales s

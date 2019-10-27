@@ -55,6 +55,8 @@ INSERT INTO item_dim VALUES('IM02','ADVERTISING');
 INSERT INTO item_dim VALUES('IM03','BEVERAGES');
 INSERT INTO item_dim VALUES('IM04','SOFTWARE');
 INSERT INTO item_dim VALUES('IM05','COMPUTER');
+INSERT INTO item_dim VALUES('IM06','MAINTENANCE SERVICE');
+INSERT INTO item_dim VALUES('IM07',upper('license service support'));
 
 -- date dim
 insert into date_dim values('0012','2011-01-01')
